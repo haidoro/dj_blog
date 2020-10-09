@@ -495,6 +495,20 @@ export 'DB_USER'=''
 export 'DB_PASSWORD'=''
 ```
 
+環境変数に SECRET_KEY も追加しておきます。(この値はダミーです)
+
+```
+export 'SECRET_KEY'='c(x+=6)_0+d7cm!$14$g-m$$xsocd)om(2&i2-&=sss9%bb+aaa'
+```
+
+settings.py の方も変更します。
+
+settings.py
+
+```
+SECRET_KEY = os.environ['SECRET_KEY']
+```
+
 
 
 ### ロギングの設定
@@ -561,6 +575,16 @@ LOGGING = {
 ```
 
 ### ルーティングの設定
+
+settings.pyのROOT_URLCONFはプロジェクト名、つまりsettings.pyが入っているフォルダ名を指定します。
+
+settings.py
+
+```
+ROOT_URLCONF = 'blog.urls'
+```
+
+
 
 ルーティングにはプロジェクト用とアプリ用があります。
 
@@ -741,7 +765,7 @@ base.html
         <!-- Navigation -->
         <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
           <div class="container">
-            <a class="navbar-brand" href="{% url 'diary:index' %}">PRIVATE DIARY</a>
+            <a class="navbar-brand" href="{% url 'my_blog:index' %}">My Blog</a>
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
               <span class="navbar-toggler-icon"></span>
             </button>
@@ -890,4 +914,474 @@ footer {
 ここでトップページを確認するとテンプレートが適用されて綺麗なページになっています。
 
 
+
+## 問い合わせページ作成
+
+* ルーティング
+* ビューの追加
+* フォームの定義
+* テンプレート作成
+* CSSでデザイン
+
+### ルーティング
+
+問い合わせページのルーティングは`my_blog` フォルダ内のurls.pyで作成します。
+
+`path('inquiry', views.inquiryView.as_view(), name='inquiry')`をurlpatternsに追加します。
+
+my_blog/urls.py
+
+```
+from django.urls import path
+
+from . import views
+
+
+app_name = 'my_blog'
+urlpatterns = [
+    path('', views.IndexView.as_view(), name="index"),
+    path('inquiry', views.inquiryView.as_view(), name='inquiry')
+]
+```
+
+### views.pyの追加
+
+urlsで `views.inquiryView` を記述したわけですから、views.pyで `inquiryView` を定義する必要があります。
+
+このページはデータベースは不要ですから汎用的なFormViewクラスを継承します。
+
+my_blog/views.py
+
+```
+from django.shortcuts import render
+from django.views import generic
+from .forms import InquiryForm
+
+
+class IndexView(generic.TemplateView):
+    template_name = "index.html"
+
+
+class InquiryView(generic.FormView):
+    template_name = "inquiry.html"
+    form_class = InquiryForm
+```
+
+### フォームのフィールドを定義
+
+
+
+my_blog/forms.py
+
+```
+from django import forms
+
+
+class InquiryForm(forms.Form):
+    name = forms.CharField(label='お名前', max_length=30)
+    email = forms.EmailField(label='メールアドレス')
+    title = forms.CharField(label='タイトル', max_length=30)
+    message = forms.CharField(label='メッセージ', widget=forms.Textarea)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['name'].widget.attrs['class'] = 'form-control col-9'
+        self.fields['name'].widget.attrs['placeholder'] = 'お名前をここに入力してください。'
+
+        self.fields['email'].widget.attrs['class'] = 'form-control col-11'
+        self.fields['email'].widget.attrs['placeholder'] = 'メールアドレスをここに入力してください。'
+
+        self.fields['title'].widget.attrs['class'] = 'form-control col-11'
+        self.fields['title'].widget.attrs['placeholder'] = 'タイトルをここに入力してください。'
+
+        self.fields['message'].widget.attrs['class'] = 'form-control col-12'
+        self.fields['message'].widget.attrs['placeholder'] = 'メッセージをここに入力してください。'
+
+```
+
+### テンプレート編集
+
+templates/base.html
+
+```
+{% load static %}
+
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>{% block title %}{% endblock %}</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+
+  <!-- Custom fonts for this template -->
+  <link href="https://fonts.googleapis.com/css?family=Catamaran:100,200,300,400,500,600,700,800,900" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i"
+    rel="stylesheet">
+
+  <!-- Custom styles for this template -->
+  <link href="{% static 'css/one-page-wonder.min.css' %}" rel="stylesheet">
+
+  <!-- My style -->
+  <link rel="stylesheet" type="text/css" href="{% static 'css/mystyle.css' %}">
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <div id="wrapper">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
+      <div class="container">
+        <a class="navbar-brand" href="{% url 'my_blog:index' %}">PRIVATE DIARY</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive"
+          aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+          <ul class="navbar-nav mr-auto">
+            <li class="nav-item {% block active_inquiry %}{% endblock %}">
+              <a class="nav-link" href="{% url 'my_blog:inquiry' %}">INQUIRY</a>
+            </li>
+          </ul>
+          <ul class="navbar-nav ml-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="#">Sign Up</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Log In</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    {% block header%}{% endblock %}
+
+    {% block contents%}{% endblock %}
+
+    <!-- Footer -->
+    <footer class="py-5 bg-black">
+      <div class="container">
+        <p class="m-0 text-center text-white small">Copyright &copy; Private Dairy 2019</p>
+      </div>
+      <!-- /.container -->
+    </footer>
+
+    <!-- Bootstrap core JavaScript -->
+    <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  </div>
+</body>
+
+</html>
+```
+
+
+
+templates/inquiry.html
+
+```
+{% extends 'base.html' %}
+
+{% block title %}お問い合わせ | Private Diary{% endblock %}
+
+{% block active_inquiry %}active{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style">
+            <form method="post">
+                {% csrf_token %}
+
+                {{ form.non_field_errors }}
+
+                {% for field in form %}
+                    <div class="form-group row">
+                        <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label">
+                            <strong>{{ field.label_tag }}</strong>
+                        </label>
+                        <div class="col-sm-8">
+                            {{ field }}
+                            {{ field.errors }}
+                        </div>
+                    </div>
+                {% endfor %}
+
+                <div class="offset-sm-4 col-sm-8">
+                    <button class="btn btn-primary" type="submit">送信</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+```
+
+### settings.pyの編集
+
+settings.pyを本番用とローカル用にわけます。
+
+共通用がsettings_common.pyでローカル用がsettings_dev.pyとします。
+
+ローカル用を動作させるには環境変数を使います。
+
+settings_common.py
+
+```
+import os
+
+from django.contrib.messages import constants as messages
+
+# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ['SECRET_KEY']
+
+
+# Application definition
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+
+    'my_blog.apps.MyBlogConfig',
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'blog.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'blog.wsgi.application'
+
+
+# データベース設定
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'my_blog',
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': '',
+        'PORT': '',
+    }
+}
+
+
+# Password validation
+# https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/2.2/topics/i18n/
+
+LANGUAGE_CODE = 'ja'
+
+TIME_ZONE = 'Asia/Tokyo'
+
+USE_I18N = True
+
+USE_L10N = True
+
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/2.2/howto/static-files/
+
+STATIC_URL = '/static/'
+
+STATICFILES_DIRS = (
+    os.path.join(BASE_DIR, 'static'),
+)
+
+MESSAGE_TAGS = {
+    messages.ERROR: 'alert alert-danger',
+    messages.WARNING: 'alert alert-warning',
+    messages.SUCCESS: 'alert alert-success',
+    messages.INFO: 'alert alert-info',
+}
+
+```
+
+
+
+settings_dev.py
+
+```
+from .settings_common import *
+
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = True
+
+ALLOWED_HOSTS = []
+
+# ロギング設定
+LOGGING = {
+    'version': 1,  # 1固定
+    'disable_existing_loggers': False,
+
+    # ロガーの設定
+    'loggers': {
+        # Djangoが利用するロガー
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        # my_blogアプリケーションが利用するロガー
+        'my_blog': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
+
+    # ハンドラの設定
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'dev'
+        },
+    },
+
+    # フォーマッタの設定
+    'formatters': {
+        'dev': {
+            'format': '\t'.join([
+                '%(asctime)s',
+                '[%(levelname)s]',
+                '%(pathname)s(Line:%(lineno)d)',
+                '%(message)s'
+            ])
+        },
+    }
+}
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+```
+
+
+
+### ローカル環境切り替えの環境変数設定
+
+環境変数に以下の内容を追記します。
+
+```
+export DJANGO_SETTINGS_MODULE=blog.settings_dev
+```
+
+
+
+
+
+## 認証アプリの作成
+
+認証用のアプリは別アプリとして作成します。
+
+そうすると他のアプリケーションにも組み込めるようになります。
+
+accountsアプリ作成
+
+```
+python manage.py startapp accounts
+```
+
+新しいアプリを作成したので、settings.py に` 'accounts.apps.AccountsConfig' `を追加します。
+
+settings.py
+
+```
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'my_blog.apps.MyBlogConfig',
+    'accounts.apps.AccountsConfig',
+]
+```
+
+### カスタムユーザーモデルを定義
+
+認証アプリを作成するときは、Djangoが用意しているユーザーモデルを使うのではなく、カスタムユーザーモデルを使う方が良い。
+
+accountsアプリがカスタムユーザーモデルを参照するようにするには次の設定を行います。
+
+accounts/models.py
+
+```
+from django.contrib.auth.models import AbstractUser
+
+
+class CustomUser(AbstractUser):
+    """拡張ユーザーモデル"""
+
+    class Meta:
+        verbose_name_plural = 'CustomUser'
+```
+
+settings.py
+
+```
+
+```
 
