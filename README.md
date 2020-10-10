@@ -1345,6 +1345,8 @@ export DJANGO_SETTINGS_MODULE=blog.settings_dev
 
 そうすると他のアプリケーションにも組み込めるようになります。
 
+最初にアプリを作成した時のようにmanage.pyを使って作成します。
+
 accountsアプリ作成
 
 ```
@@ -1353,7 +1355,7 @@ python manage.py startapp accounts
 
 新しいアプリを作成したので、settings.py に` 'accounts.apps.AccountsConfig' `を追加します。
 
-settings.py
+settings_common.py
 
 ```
 INSTALLED_APPS = [
@@ -1387,9 +1389,484 @@ class CustomUser(AbstractUser):
         verbose_name_plural = 'CustomUser'
 ```
 
-settings.py
+settings_common.pyの最後に以下内容を追加します。
+
+accountsフォルダ内のmodels.pyで定義したCustomUserクラスがAUTH_USER_MODELということです。
+
+settings_common.py
+
+```
+AUTH_USER_MODEL = 'accounts.CustomUser'
+```
+
+### カスタムユーザーモデルを管理サイトに登録
+
+管理サイトでカスタムユーザーモデルを編集できるようにするものです。
+
+```
+from django.contrib import admin
+from .models import CustomUser
+
+
+admin.site.register(CustomUser)
+```
+
+## マイグレーションの実行
+
+新しくmodelを作成したり、変更した場合にモデルをデータベースに反映する作業です。
+
+マイグレーション作業は、makemigrations と migrate の２段回のコマンドで実行します。
+
+makemigrations
+
+```
+python manage.py makemigrations
+```
+
+結果
+
+**Migrations for 'accounts':**
+
+ **accounts/migrations/0001_initial.py**
+
+  \- Create model CustomUser
+
+
+
+migrate
+
+```
+python manage.py migrate
+```
+
+結果
+
+**Operations to perform:**
+
+ **Apply all migrations:** accounts, admin, auth, contenttypes, sessions
+
+**Running migrations:**
+
+ Applying contenttypes.0001_initial... **OK**
+
+ Applying contenttypes.0002_remove_content_type_name... **OK**
+
+ Applying auth.0001_initial... **OK**
+
+ Applying auth.0002_alter_permission_name_max_length... **OK**
+
+ Applying auth.0003_alter_user_email_max_length... **OK**
+
+ Applying auth.0004_alter_user_username_opts... **OK**
+
+ Applying auth.0005_alter_user_last_login_null... **OK**
+
+ Applying auth.0006_require_contenttypes_0002... **OK**
+
+ Applying auth.0007_alter_validators_add_error_messages... **OK**
+
+ Applying auth.0008_alter_user_username_max_length... **OK**
+
+ Applying auth.0009_alter_user_last_name_max_length... **OK**
+
+ Applying auth.0010_alter_group_name_max_length... **OK**
+
+ Applying auth.0011_update_proxy_permissions... **OK**
+
+ Applying auth.0012_alter_user_first_name_max_length... **OK**
+
+ Applying accounts.0001_initial... **OK**
+
+ Applying admin.0001_initial... **OK**
+
+ Applying admin.0002_logentry_remove_auto_add... **OK**
+
+ Applying admin.0003_logentry_add_action_flag_choices... **OK**
+
+ Applying sessions.0001_initial... **OK**
+
+
+
+### 認証アプリのためのdjango-allauthのインストール
+
+django-allauthは単純な認証の仕組み以外にOAuth認証、ソーシャル認証までサポートした機能を持っています。
+
+今回は、サインアップ（ユーザー登録）、パスワードリセット、ログイン・ログアウト、メールアドレス認証を実施します。
+
+#### インストール
+
+カレントディレクトリを仮想環境のルートに戻ります。今回の作業ではdj_blogで、Djangoをインストールした場所です。
+
+認証機能を提供するパッケージをインストールしておきます。
+
+```
+pip install django-allauth
+```
+
+### settings_commonの編集
+
+django-allauthを活用するにはsettings_commonで編集します。
+
+`settings_common.py` の `INSTALLED_APPS` に以下の内容を追加します。
+
+```
+'django.contrib.sites',
+'allauth',
+'allauth.account',
+```
+
+また、次の内容を最後の行に追加します。
+
+```
+# django-allauthで利用するdjango.contrib.sitesを使うためにサイト識別用IDを設定
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = (
+    'allauth.account.auth_backends.AuthenticationBackend',  # 一般ユーザー用(メールアドレス認証)
+    'django.contrib.auth.backends.ModelBackend',  # 管理サイト用(ユーザー名認証)
+)
+
+# メールアドレス認証に変更する設定
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_USERNAME_REQUIRED = False
+
+# サインアップにメールアドレス確認を挟むよう設定
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+ACCOUNT_EMAIL_REQUIRED = True
+
+# ログイン/ログアウト後の遷移先を設定
+LOGIN_REDIRECT_URL = 'my_blog:index'
+ACCOUNT_LOGOUT_REDIRECT_URL = 'account_login'
+
+# ログアウトリンクのクリック一発でログアウトする設定
+ACCOUNT_LOGOUT_ON_GET = True
+
+# django-allauthが送信するメールの件名に自動付与される接頭辞をブランクにする設定
+ACCOUNT_EMAIL_SUBJECT_PREFIX = ''
+
+# デフォルトのメール送信元を設定
+DEFAULT_FROM_EMAIL = 'admin@example.com'
 
 ```
 
+この時点でsettings_commonは次のようになっています。
+
+
+
+settings_common.py
+
+```
+import os
+
+from django.contrib.messages import constants as messages
+
+# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ['SECRET_KEY']
+
+
+# Application definition
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'my_blog.apps.MyBlogConfig',
+    'accounts.apps.AccountsConfig',
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'blog.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'blog.wsgi.application'
+
+
+# データベース設定
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'my_blog',
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': '',
+        'PORT': '',
+    }
+}
+
+
+# Password validation
+# https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/2.2/topics/i18n/
+
+LANGUAGE_CODE = 'ja'
+
+TIME_ZONE = 'Asia/Tokyo'
+
+USE_I18N = True
+
+USE_L10N = True
+
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/2.2/howto/static-files/
+
+STATIC_URL = '/static/'
+
+STATICFILES_DIRS = (
+    os.path.join(BASE_DIR, 'static'),
+)
+
+MESSAGE_TAGS = {
+    messages.ERROR: 'alert alert-danger',
+    messages.WARNING: 'alert alert-warning',
+    messages.SUCCESS: 'alert alert-success',
+    messages.INFO: 'alert alert-info',
+}
+
+AUTH_USER_MODEL = 'accounts.CustomUser'
+
+# django-allauthで利用するdjango.contrib.sitesを使うためにサイト識別用IDを設定
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = (
+    # 一般ユーザー用(メールアドレス認証)
+    'allauth.account.auth_backends.AuthenticationBackend',
+    'django.contrib.auth.backends.ModelBackend',  # 管理サイト用(ユーザー名認証)
+)
+
+# メールアドレス認証に変更する設定
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_USERNAME_REQUIRED = False
+
+# サインアップにメールアドレス確認を挟むよう設定
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+ACCOUNT_EMAIL_REQUIRED = True
+
+# ログイン/ログアウト後の遷移先を設定
+LOGIN_REDIRECT_URL = 'my_blog:index'
+ACCOUNT_LOGOUT_REDIRECT_URL = 'account_login'
+
+# ログアウトリンクのクリック一発でログアウトする設定
+ACCOUNT_LOGOUT_ON_GET = True
+
+# django-allauthが送信するメールの件名に自動付与される接頭辞をブランクにする設定
+ACCOUNT_EMAIL_SUBJECT_PREFIX = ''
+
+# デフォルトのメール送信元を設定
+DEFAULT_FROM_EMAIL = 'admin@example.com'
+
+```
+
+### ルーティングの追加
+
+blog/urls.py
+
+```
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('my_blog.urls')),
+    path('accounts/', include('allauth.urls')),
+]
+```
+
+### django-allauthのテンプレート作成
+
+accountフォルダ内にtemplatesフォルダを作成して各ファイルを作成します。
+
+
+
+base.html
+
+```
+{% load static %}
+
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>{% block title %}{% endblock %}</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+
+  <!-- Custom fonts for this template -->
+  <link href="https://fonts.googleapis.com/css?family=Catamaran:100,200,300,400,500,600,700,800,900" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i"
+    rel="stylesheet">
+
+  <!-- Custom styles for this template -->
+  <link href="{% static 'css/one-page-wonder.min.css' %}" rel="stylesheet">
+
+  <!-- My style -->
+  <link rel="stylesheet" type="text/css" href="{% static 'css/mystyle.css' %}">
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <div id="wrapper">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
+      <div class="container">
+        <a class="navbar-brand" href="{% url 'my_blog:index' %}">My Blog</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive"
+          aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+          <ul class="navbar-nav mr-auto">
+            <li class="nav-item {% block active_inquiry %}{% endblock %}">
+              <a class="nav-link" href="{% url 'my_blog:inquiry' %}">INQUIRY</a>
+            </li>
+          </ul>
+          <ul class="navbar-nav ml-auto">
+            {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'account_logout' %}">Log Out</a>
+            </li>
+            {% else %}
+            <li class="nav-item {% block active_signup %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_signup' %}">Sign Up</a>
+            </li>
+            <li class="nav-item {% block active_login %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_login' %}">Log In</a>
+            </li>
+            {% endif %}
+          </ul>
+
+        </div>
+      </div>
+    </nav>
+
+    {% block header%}{% endblock %}
+    {% if messages %}
+    <div class="container">
+      <div class="row">
+        <div class="my-div-style w-100">
+          <ul class="messages" style="list-style: none;">
+            {% for message in messages %}
+            <li {% if message.tags %} class="{{ message.tags }}" {% endif %}>
+              {{ message }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% block contents%}{% endblock %}
+
+    <!-- Footer -->
+    <footer class="py-5 bg-black">
+      <div class="container">
+        <p class="m-0 text-center text-white small">Copyright &copy; Private Dairy 2019</p>
+      </div>
+      <!-- /.container -->
+    </footer>
+
+    <!-- Bootstrap core JavaScript -->
+    <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  </div>
+</body>
+
+</html>
+```
+
+### django-allauth用マイグレーション
+
+
+
+migrate
+
+```
+python manage.py migrate
+```
+
+結果
+
+**Operations to perform:**
+
+ **Apply all migrations:** account, accounts, admin, auth, contenttypes, sessions, sites
+
+**Running migrations:**
+
+ Applying account.0001_initial... **OK**
+
+ Applying account.0002_email_max_length... **OK**
+
+ Applying sites.0001_initial... **OK**
+
+ Applying sites.0002_alter_domain_unique... **OK**
+
+
+
+この段階でローカルサーバーを動かしてログインできるかを確認します。
+
+```
+python manage.py runserver
 ```
 

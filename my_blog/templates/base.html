@@ -43,19 +43,40 @@
             </li>
           </ul>
           <ul class="navbar-nav ml-auto">
+            {% if user.is_authenticated %}
             <li class="nav-item">
-              <a class="nav-link" href="#">Sign Up</a>
+              <a class="nav-link" href="{% url 'account_logout' %}">Log Out</a>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#">Log In</a>
+            {% else %}
+            <li class="nav-item {% block active_signup %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_signup' %}">Sign Up</a>
             </li>
+            <li class="nav-item {% block active_login %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_login' %}">Log In</a>
+            </li>
+            {% endif %}
           </ul>
+
         </div>
       </div>
     </nav>
 
     {% block header%}{% endblock %}
-
+    {% if messages %}
+    <div class="container">
+      <div class="row">
+        <div class="my-div-style w-100">
+          <ul class="messages" style="list-style: none;">
+            {% for message in messages %}
+            <li {% if message.tags %} class="{{ message.tags }}" {% endif %}>
+              {{ message }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    {% endif %}
     {% block contents%}{% endblock %}
 
     <!-- Footer -->
