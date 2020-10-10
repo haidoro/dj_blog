@@ -36,3 +36,53 @@ class BlogListView(LoginRequiredMixin, generic.ListView):
         blogs = Blog.objects.filter(
             user=self.request.user).order_by('-created_at')
         return blogs
+
+
+class BlogDetailView(LoginRequiredMixin, generic.DetailView):
+    model = Blog
+    template_name = 'blog_detail.html'
+
+
+class BlogCreateView(LoginRequiredMixin, generic.CreateView):
+    model = Blog
+    template_name = 'blog_create.html'
+    form_class = BlogCreateForm
+    success_url = reverse_lazy('my_blog:blog_list')
+
+    def form_valid(self, form):
+        blog = form.save(commit=False)
+        blog.user = self.request.user
+        blog.save()
+        messages.success(self.request, '日記を作成しました。')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "日記の作成に失敗しました。")
+        return super().form_invalid(form)
+
+
+class BlogUpdateView(LoginRequiredMixin, generic.UpdateView):
+    model = Blog
+    template_name = 'blog_update.html'
+    form_class = BlogCreateForm
+
+    def get_success_url(self):
+        return reverse_lazy('my_blog:blog_detail', kwargs={'pk': self.kwargs['pk']})
+
+    def form_valid(self, form):
+        messages.success(self.request, '日記を更新しました。')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "日記の更新に失敗しました。")
+        return super().form_invalid(form)
+
+
+class BlogDeleteView(LoginRequiredMixin, generic.DeleteView):
+    model = Blog
+    template_name = 'blog_delete.html'
+    success_url = reverse_lazy('my_blog:blog_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "日記を削除しました。")
+        return super().delete(request, *args, **kwargs)

@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Web上にあなた専用の日記ページを保存できるサービス | Private Diary{% endblock %}
+{% block title %}Web上にあなた専用の日記ページを保存できるサービス | My Blog{% endblock %}
 
 {% block header%}
 <header class="masthead text-center text-white">
   <div class="masthead-content">
     <div class="container">
-      <h1 class="masthead-heading mb-0">Private Diary</h1>
-      <h2 class="masthead-subheading mb-0">あなた専用の日記保存サービス</h2>
-      <a href="#" class="btn btn-primary btn-xl rounded-pill mt-5">LOG IN</a>
+      <h1 class="masthead-heading mb-0">My Blog</h1>
+      <h2 class="masthead-subheading mb-0">あなた専用のBlog保存サービス</h2>
+      <a href="{% url 'account_login' %}" class="btn btn-primary btn-xl rounded-pill mt-5">LOG IN</a>
     </div>
   </div>
   <div class="bg-circle-1 bg-circle"></div>
@@ -48,7 +48,7 @@
       </div>
       <div class="col-lg-6">
         <div class="p-5">
-          <h2 class="display-4">Save Your Diary</h2>
+          <h2 class="display-4">Save Your Blog</h2>
           <p>あなたの日記をWebに保存</p>
         </div>
       </div>
