@@ -2526,3 +2526,585 @@ python manage.py runserver
 
 
 
+## CRUD作成
+
+### ルーティング
+
+my_blog/urls.py
+
+```
+from django.urls import path
+
+from . import views
+
+
+app_name = 'my_blog'
+urlpatterns = [
+    path('', views.IndexView.as_view(), name="index"),
+    path('inquiry', views.InquiryView.as_view(), name='inquiry'),
+    path('blog-list/', views.BlogListView.as_view(), name="blog_list"),
+    path('blog-detail/<int:pk>/',
+         views.BlogDetailView.as_view(), name="blog_detail"),
+    path('blog-create/', views.BlogCreateView.as_view(), name="blog_create"),
+    path('blog-update/<int:pk>/',
+         views.BlogUpdateView.as_view(), name="blog_update"),
+    path('blog-delete/<int:pk>/',
+         views.BlogDeleteView.as_view(), name="blog_delete"),
+]
+
+```
+
+
+
+### Views.py
+
+
+
+```
+import logging
+
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse_lazy
+from django.views import generic
+
+from .forms import InquiryForm, BlogCreateForm
+from .models import Blog
+
+logger = logging.getLogger(__name__)
+
+
+class IndexView(generic.TemplateView):
+    template_name = "index.html"
+
+
+class InquiryView(generic.FormView):
+    template_name = "inquiry.html"
+    form_class = InquiryForm
+    success_url = reverse_lazy('my_blog:inquiry')
+
+    def form_valid(self, form):
+        form.send_email()
+        messages.success(self.request, 'メッセージを送信しました。')
+        logger.info('Inquiry sent by {}'.format(form.cleaned_data['name']))
+        return super().form_valid(form)
+
+
+class BlogListView(LoginRequiredMixin, generic.ListView):
+    model = Blog
+    template_name = 'blog_list.html'
+    paginate_by = 2
+
+    def get_queryset(self):
+        blogs = Blog.objects.filter(
+            user=self.request.user).order_by('-created_at')
+        return blogs
+
+
+class BlogDetailView(LoginRequiredMixin, generic.DetailView):
+    model = Blog
+    template_name = 'blog_detail.html'
+
+
+class BlogCreateView(LoginRequiredMixin, generic.CreateView):
+    model = Blog
+    template_name = 'blog_create.html'
+    form_class = BlogCreateForm
+    success_url = reverse_lazy('my_blog:blog_list')
+
+    def form_valid(self, form):
+        blog = form.save(commit=False)
+        blog.user = self.request.user
+        blog.save()
+        messages.success(self.request, '日記を作成しました。')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "日記の作成に失敗しました。")
+        return super().form_invalid(form)
+
+
+class BlogUpdateView(LoginRequiredMixin, generic.UpdateView):
+    model = Blog
+    template_name = 'blog_update.html'
+    form_class = BlogCreateForm
+
+    def get_success_url(self):
+        return reverse_lazy('my_blog:blog_detail', kwargs={'pk': self.kwargs['pk']})
+
+    def form_valid(self, form):
+        messages.success(self.request, '日記を更新しました。')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "日記の更新に失敗しました。")
+        return super().form_invalid(form)
+
+
+class BlogDeleteView(LoginRequiredMixin, generic.DeleteView):
+    model = Blog
+    template_name = 'blog_delete.html'
+    success_url = reverse_lazy('my_blog:blog_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, "日記を削除しました。")
+        return super().delete(request, *args, **kwargs)
+
+```
+
+
+
+### テンプレート
+
+
+
+base.html
+
+```
+{% load static %}
+
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>{% block title %}{% endblock %}</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+
+  <!-- Custom fonts for this template -->
+  <link href="https://fonts.googleapis.com/css?family=Catamaran:100,200,300,400,500,600,700,800,900" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i"
+    rel="stylesheet">
+
+  <!-- Custom styles for this template -->
+  <link href="{% static 'css/one-page-wonder.min.css' %}" rel="stylesheet">
+
+  <!-- My style -->
+  <link rel="stylesheet" type="text/css" href="{% static 'css/mystyle.css' %}">
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <div id="wrapper">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
+      <div class="container">
+        <a class="navbar-brand" href="{% url 'my_blog:index' %}">My Blog</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive"
+          aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+          <ul class="navbar-nav mr-auto">
+            <li class="nav-item {% block active_inquiry %}{% endblock %}">
+              <a class="nav-link" href="{% url 'my_blog:inquiry' %}">INQUIRY</a>
+            </li>
+            {% if user.is_authenticated %}
+            <li class="nav-item {% block active_diary_list %}{% endblock %}">
+              <a class="nav-link" href="{% url 'my_blog:blog_list' %}">BLOG LIST</a>
+            </li>
+            {% endif %}
+
+          </ul>
+          <ul class="navbar-nav ml-auto">
+            {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'account_logout' %}">Log Out</a>
+            </li>
+            {% else %}
+            <li class="nav-item {% block active_signup %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_signup' %}">Sign Up</a>
+            </li>
+            <li class="nav-item {% block active_login %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_login' %}">Log In</a>
+            </li>
+            {% endif %}
+          </ul>
+
+        </div>
+      </div>
+    </nav>
+
+    {% block header%}{% endblock %}
+    {% if messages %}
+    <div class="container">
+      <div class="row">
+        <div class="my-div-style w-100">
+          <ul class="messages" style="list-style: none;">
+            {% for message in messages %}
+            <li {% if message.tags %} class="{{ message.tags }}" {% endif %}>
+              {{ message }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% block contents%}{% endblock %}
+
+    <!-- Footer -->
+    <footer class="py-5 bg-black">
+      <div class="container">
+        <p class="m-0 text-center text-white small">Copyright &copy; My Blog</p>
+      </div>
+      <!-- /.container -->
+    </footer>
+
+    <!-- Bootstrap core JavaScript -->
+    <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  </div>
+</body>
+
+</html>
+```
+
+
+
+index.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Web上にあなた専用の日記ページを保存できるサービス | My Blog{% endblock %}
+
+{% block header%}
+<header class="masthead text-center text-white">
+  <div class="masthead-content">
+    <div class="container">
+      <h1 class="masthead-heading mb-0">My Blog</h1>
+      <h2 class="masthead-subheading mb-0">あなた専用のBlog保存サービス</h2>
+      <a href="{% url 'account_login' %}" class="btn btn-primary btn-xl rounded-pill mt-5">LOG IN</a>
+    </div>
+  </div>
+  <div class="bg-circle-1 bg-circle"></div>
+  <div class="bg-circle-2 bg-circle"></div>
+  <div class="bg-circle-3 bg-circle"></div>
+  <div class="bg-circle-4 bg-circle"></div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<section>
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6 order-lg-2">
+        <div class="p-5">
+          <img class="img-fluid rounded-circle" src="{% static 'img/01.jpg' %}" alt="">
+        </div>
+      </div>
+      <div class="col-lg-6 order-lg-1">
+        <div class="p-5">
+          <h2 class="display-4">Web Diary</h2>
+          <p>Web上で作成/編集/削除ができる日記</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6">
+        <div class="p-5">
+          <img class="img-fluid rounded-circle" src="{% static 'img/02.jpg' %}" alt="">
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="p-5">
+          <h2 class="display-4">Save Your Blog</h2>
+          <p>あなたの日記をWebに保存</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6 order-lg-2">
+        <div class="p-5">
+          <img class="img-fluid rounded-circle" src="{% static 'img/03.jpg' %}" alt="">
+        </div>
+      </div>
+      <div class="col-lg-6 order-lg-1">
+        <div class="p-5">
+          <h2 class="display-4">Membership System</h2>
+          <p>会員制のWeb日記サービス</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+```
+
+
+
+
+
+blog_create.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記作成 | Private Diary{% endblock %}
+
+{% block active_diary_list %}active{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style w-100">
+            <form method="POST" enctype='multipart/form-data'>
+                {% csrf_token %}
+                <table class="table">
+                    {{ form.as_table }}
+                </table>
+                <button class="btn btn-primary" type="submit">作成</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+
+
+
+
+blog_delete.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記削除 | Private Diary{% endblock %}
+
+{% block active_diary_list %}active{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style w-100">
+            <form method="POST">
+                {% csrf_token %}
+                <p>本当に削除しますか？</p>
+                <button class="btn btn-primary mt-5" type="submit">削除</button>
+                <a class="btn btn-secondary mt-5 ml-2" href="{% url 'my_blog:blog_detail' object.pk %}">キャンセル</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+
+
+blog_detail.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記詳細 | Private Diary{% endblock %}
+
+{% block active_diary_list %}active{% endblock %}
+
+
+{% block contents %}
+<div class="container">
+    <div class="my-div-style w-100">
+        <div class="row">
+            <div class="col-3">
+                <strong>タイトル</strong>
+            </div>
+            <div class="col-9">
+                {{ object.title }}
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+            <div class="col-3">
+                <strong>本文</strong>
+            </div>
+            <div class="col-9">
+                {{ object.content|linebreaksbr }}
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+            <div class="col-3">
+                <strong>写真</strong>
+            </div>
+            <div class="col-3">
+                {% if object.photo1 %}
+                <img src="{{ object.photo1.url }}" width="200" height="200" />
+                {% endif %}
+            </div>
+            <div class="col-3">
+                {% if object.photo2 %}
+                <img src="{{ object.photo2.url }}" width="200" height="200" />
+                {% endif %}
+            </div>
+            <div class="col-3">
+                {% if object.photo3 %}
+                <img src="{{ object.photo3.url }}" width="200" height="200" />
+                {% endif %}
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+            <div class="col-3">
+                <strong>作成日時</strong>
+            </div>
+            <div class="col-9">
+                {{ object.created_at }}
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+            <div class="col-3">
+                <strong>更新日時</strong>
+            </div>
+            <div class="col-9">
+                {{ object.updated_at }}
+            </div>
+        </div>
+
+        <a class="btn btn-success mt-5 mb-3" href="{% url 'my_blog:blog_update' object.pk %}">編集</a>
+        <a class="btn btn-danger mt-5 ml-2 mb-3" href="{% url 'my_blog:blog_delete' object.pk %}">削除</a>
+    </div>
+</div>
+{% endblock %}
+```
+
+
+
+
+
+blog_update.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記編集 | Private Diary{% endblock %}
+
+{% block active_diary_list %}active{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style w-100">
+            <form method="POST" enctype='multipart/form-data'>
+                {% csrf_token %}
+                <table class="table">
+                    {{ form.as_table }}
+                </table>
+                <button class="btn btn-primary" type="submit">更新</button>
+                <a class="btn btn-secondary ml-2" href="{% url 'my_blog:blog_detail' object.pk %}">キャンセル</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+
+
+blog_list.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記一覧 | My Blog{% endblock %}
+
+{% block active_my_blog_list %}active{% endblock %}
+
+{% block head %}
+<link href="{% static 'css/clean-blog.min.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style w-100">
+            <div class="col-lg-8 col-md-10 mx-auto">
+                <div class="clearfix">
+                    <a class="btn btn-primary float-right" href="">新規作成</a>
+                </div>
+                {% for blog in blog_list %}
+                <div class="post-preview">
+                    <a href="{% url 'my_blog:blog_detail' blog.pk %}">
+                        <h2 class="post-title">
+                            {{ blog.title }}
+                        </h2>
+                        <h3 class="post-subtitle">
+                            {{ blog.content|truncatechars:20 }}
+                        </h3>
+                    </a>
+                    <p class="post-meta">{{ blog.created_at }}</p>
+                </div>
+                <hr>
+                {% empty %}
+                <p>日記がありません。</p>
+                {% endfor %}
+
+                <!-- ページネーション処理 -->
+                {% if is_paginated %}
+                <ul class="pagination">
+                    <!-- 前ページへのリンク -->
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <!-- ページ数表示 -->
+                    {% for page_num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == page_num %}
+                    <li class="page-item active"><a class="page-link" href="#">{{ page_num }}</a></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a></li>
+                    {% endif %}
+                    {% endfor %}
+
+                    <!-- 次ページへのリンク -->
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
