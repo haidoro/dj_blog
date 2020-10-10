@@ -1870,3 +1870,515 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+## メディアファイルを使えるようにする
+
+画像を扱うのでpillowをインストールします。
+
+仮想環境のルートでインストールします。
+
+```
+pip install pillow
+```
+
+### MEDIA_ROOTの設定
+
+settings_devとsettings_commonにMEDIA_ROOTの設定をします。
+
+settings_dev.py
+
+```
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+```
+
+settings_common.py
+
+```
+MEDIA_URL = '/media/'
+```
+
+### プロジェクト用urls.pyの編集
+
+開発サーバーでメディアファイルを配信するにはメディアファイル配信用ルーティングが必要です。
+
+blog/urls.py
+
+```
+from django.contrib import admin
+from django.contrib.staticfiles.urls import static
+from django.urls import path, include
+from . import settings_common, settings_dev
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('my_blog.urls')),
+    path('accounts/', include('allauth.urls')),
+]
+
+# 開発サーバーでメディアを配信できるようにする設定
+urlpatterns += static(settings_common.MEDIA_URL,
+                      document_root=settings_dev.MEDIA_ROOT)
+
+```
+
+## Blogモデルを定義
+
+ユーザーが作成するブログを保存するデータベースのテーブルを作成します。
+
+データベースのテーブルはアプリ内のmodels.pyで行います。
+
+
+
+my_blog/models.py
+
+```
+from accounts.models import CustomUser
+from django.db import models
+
+
+class Blog(models.Model):
+    """Blogモデル"""
+
+    user = models.ForeignKey(
+        CustomUser, verbose_name='ユーザー', on_delete=models.PROTECT)
+    title = models.CharField(verbose_name='タイトル', max_length=40)
+    content = models.TextField(verbose_name='本文', blank=True, null=True)
+    photo1 = models.ImageField(verbose_name='写真1', blank=True, null=True)
+    photo2 = models.ImageField(verbose_name='写真2', blank=True, null=True)
+    photo3 = models.ImageField(verbose_name='写真3', blank=True, null=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
+
+    class Meta:
+        verbose_name_plural = 'Blog'
+
+    def __str__(self):
+        return self.title
+```
+
+### 管理サイトの作成
+
+アプリの中のadmin.pyを編集すると管理サイトができます。
+
+
+
+my_blog/admin.py
+
+```
+from django.contrib import admin
+
+from .models import Blog
+
+
+admin.site.register(Blog)
+```
+
+## 日記一覧リスト作成
+
+日記一覧リストのページを作成します。
+
+* ルーティング
+* ビュー作成
+* テンプレート作成
+
+### ルーティング
+
+
+
+my_blog/urls.py
+
+```
+from django.urls import path
+
+from . import views
+
+
+app_name = 'my_blog'
+urlpatterns = [
+    path('', views.IndexView.as_view(), name="index"),
+    path('inquiry', views.InquiryView.as_view(), name='inquiry'),
+    path('blog-list/', views.BlogListView.as_view(), name="blog_list"),
+]
+```
+
+### viewsの作成
+
+
+
+my_blog/views.py
+
+```
+import logging
+
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse_lazy
+from django.views import generic
+
+from .forms import InquiryForm, BlogCreateForm
+from .models import Blog
+
+logger = logging.getLogger(__name__)
+
+
+class IndexView(generic.TemplateView):
+    template_name = "index.html"
+
+
+class InquiryView(generic.FormView):
+    template_name = "inquiry.html"
+    form_class = InquiryForm
+    success_url = reverse_lazy('my_blog:inquiry')
+
+    def form_valid(self, form):
+        form.send_email()
+        messages.success(self.request, 'メッセージを送信しました。')
+        logger.info('Inquiry sent by {}'.format(form.cleaned_data['name']))
+        return super().form_valid(form)
+
+
+class BlogListView(LoginRequiredMixin, generic.ListView):
+    model = Blog
+    template_name = 'blog_list.html'
+    paginate_by = 2
+
+    def get_queryset(self):
+        blogs = Blog.objects.filter(
+            user=self.request.user).order_by('-created_at')
+        return blogs
+
+```
+
+
+
+### CSS追加
+
+[Start Bootstrap](https://startbootstrap.com/)の[CleanBlog](https://startbootstrap.com/themes/clean-blog/)のテンプレート活用
+
+ここは良さげなテンプレートが色々ありますね。エンジニアは潔くデザインはBootstrapに任せるのが吉。
+
+clean-blog.min.cssを static/css に追加。
+
+my_blogフォルダに blog_list.html を作成します。CleanBlogから持ってきたテンプレートを活用してコーディングします。
+
+my_blog/templates/blog_list.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記一覧 | My Blog{% endblock %}
+
+{% block active_my_blog_list %}active{% endblock %}
+
+{% block head %}
+<link href="{% static 'css/clean-blog.min.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style w-100">
+            <div class="col-lg-8 col-md-10 mx-auto">
+                <div class="clearfix">
+                    <a class="btn btn-primary float-right" href="{% url 'my_blog:blog_create' %}">新規作成</a>
+                </div>
+                {% for blog in blog_list %}
+                <div class="post-preview">
+                    <a href="{% url 'my_blog:diary_detail' diary.pk %}">
+                        <h2 class="post-title">
+                            {{ blog.title }}
+                        </h2>
+                        <h3 class="post-subtitle">
+                            {{ blog.content|truncatechars:20 }}
+                        </h3>
+                    </a>
+                    <p class="post-meta">{{ blog.created_at }}</p>
+                </div>
+                <hr>
+                {% empty %}
+                <p>日記がありません。</p>
+                {% endfor %}
+
+                <!-- ページネーション処理 -->
+                {% if is_paginated %}
+                <ul class="pagination">
+                    <!-- 前ページへのリンク -->
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <!-- ページ数表示 -->
+                    {% for page_num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == page_num %}
+                    <li class="page-item active"><a class="page-link" href="#">{{ page_num }}</a></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a></li>
+                    {% endif %}
+                    {% endfor %}
+
+                    <!-- 次ページへのリンク -->
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+
+
+#### 遷移の仕組み
+
+my_blog/settings_common.py
+
+```
+LOGIN_REDIRECT_URL = 'blog:blog_list'
+```
+
+### base.htmlの編集
+
+```
+<li class="nav-item {% block active_inquiry %}{% endblock %}">
+   <a class="nav-link" href="{% url 'my_blog:inquiry' %}">INQUIRY</a>
+</li>
+```
+
+以上の内容の次に以下内容を追加
+
+```
+{% if user.is_authenticated %}
+   <li class="nav-item {% block active_diary_list %}{% endblock %}">
+     <a class="nav-link" href="{% url 'diary:diary_list' %}">DIARY LIST</a>
+   </li>
+{% endif %}
+
+```
+
+
+
+my_blog/templates/base.html
+
+```
+{% load static %}
+
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>{% block title %}{% endblock %}</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+
+  <!-- Custom fonts for this template -->
+  <link href="https://fonts.googleapis.com/css?family=Catamaran:100,200,300,400,500,600,700,800,900" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i"
+    rel="stylesheet">
+
+  <!-- Custom styles for this template -->
+  <link href="{% static 'css/one-page-wonder.min.css' %}" rel="stylesheet">
+
+  <!-- My style -->
+  <link rel="stylesheet" type="text/css" href="{% static 'css/mystyle.css' %}">
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <div id="wrapper">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
+      <div class="container">
+        <a class="navbar-brand" href="{% url 'my_blog:index' %}">My Blog</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive"
+          aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+          <ul class="navbar-nav mr-auto">
+            <li class="nav-item {% block active_inquiry %}{% endblock %}">
+              <a class="nav-link" href="{% url 'my_blog:inquiry' %}">INQUIRY</a>
+            </li>
+            {% if user.is_authenticated %}
+            <li class="nav-item {% block active_diary_list %}{% endblock %}">
+              <a class="nav-link" href="{% url 'diary:diary_list' %}">DIARY LIST</a>
+            </li>
+            {% endif %}
+
+          </ul>
+          <ul class="navbar-nav ml-auto">
+            {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'account_logout' %}">Log Out</a>
+            </li>
+            {% else %}
+            <li class="nav-item {% block active_signup %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_signup' %}">Sign Up</a>
+            </li>
+            <li class="nav-item {% block active_login %}{% endblock %}">
+              <a class="nav-link" href="{% url 'account_login' %}">Log In</a>
+            </li>
+            {% endif %}
+          </ul>
+
+        </div>
+      </div>
+    </nav>
+
+    {% block header%}{% endblock %}
+    {% if messages %}
+    <div class="container">
+      <div class="row">
+        <div class="my-div-style w-100">
+          <ul class="messages" style="list-style: none;">
+            {% for message in messages %}
+            <li {% if message.tags %} class="{{ message.tags }}" {% endif %}>
+              {{ message }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% block contents%}{% endblock %}
+
+    <!-- Footer -->
+    <footer class="py-5 bg-black">
+      <div class="container">
+        <p class="m-0 text-center text-white small">Copyright &copy; Private Dairy 2019</p>
+      </div>
+      <!-- /.container -->
+    </footer>
+
+    <!-- Bootstrap core JavaScript -->
+    <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  </div>
+</body>
+
+</html>
+```
+
+
+
+forms.py
+
+```
+from django import forms
+from django.core.mail import EmailMessage
+from .models import Blog
+
+
+class InquiryForm(forms.Form):
+    name = forms.CharField(label='お名前', max_length=30)
+    email = forms.EmailField(label='メールアドレス')
+    title = forms.CharField(label='タイトル', max_length=30)
+    message = forms.CharField(label='メッセージ', widget=forms.Textarea)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['name'].widget.attrs['class'] = 'form-control col-9'
+        self.fields['name'].widget.attrs['placeholder'] = 'お名前をここに入力してください。'
+
+        self.fields['email'].widget.attrs['class'] = 'form-control col-11'
+        self.fields['email'].widget.attrs['placeholder'] = 'メールアドレスをここに入力してください。'
+
+        self.fields['title'].widget.attrs['class'] = 'form-control col-11'
+        self.fields['title'].widget.attrs['placeholder'] = 'タイトルをここに入力してください。'
+
+        self.fields['message'].widget.attrs['class'] = 'form-control col-12'
+        self.fields['message'].widget.attrs['placeholder'] = 'メッセージをここに入力してください。'
+
+    def send_email(self):
+        name = self.cleaned_data['name']
+        email = self.cleaned_data['email']
+        title = self.cleaned_data['title']
+        message = self.cleaned_data['message']
+
+        subject = 'お問い合わせ {}'.format(title)
+        message = '送信者名: {0}\nメールアドレス: {1}\nメッセージ:\n{2}'.format(
+            name, email, message)
+        from_email = 'admin@example.com'
+        to_list = [
+            'test@example.com'
+        ]
+        cc_list = [
+            email
+        ]
+
+        message = EmailMessage(subject=subject, body=message,
+                               from_email=from_email, to=to_list, cc=cc_list)
+        message.send()
+
+
+class BlogCreateForm(forms.ModelForm):
+    class Meta:
+        model = Blog
+        fields = ('title', 'content', 'photo1', 'photo2', 'photo3', )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
+
+```
+
+
+
+
+
+
+
+この時点でBlogモデルをデータベースに反映するために、マイグレーションを行います。
+
+makemigrations
+
+```
+python manage.py makemigrations
+```
+
+結果
+
+**Migrations for 'my_blog':**
+
+ **my_blog/migrations/0001_initial.py**
+
+  \- Create model Blog
+
+
+
+migrate
+
+```
+python manage.py migrate
+```
+
+結果
+
+**Operations to perform:**
+
+ **Apply all migrations:** account, accounts, admin, auth, contenttypes, my_blog, sessions, sites
+
+**Running migrations:**
+
+ Applying my_blog.0001_initial... **OK**
+
+
+
