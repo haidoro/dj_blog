@@ -2080,11 +2080,98 @@ my_blog/templates/blog_list.html
         <div class="my-div-style w-100">
             <div class="col-lg-8 col-md-10 mx-auto">
                 <div class="clearfix">
-                    <a class="btn btn-primary float-right" href="{% url 'my_blog:blog_create' %}">新規作成</a>
+                    <a class="btn btn-primary float-right" href="">新規作成</a>
                 </div>
                 {% for blog in blog_list %}
                 <div class="post-preview">
-                    <a href="{% url 'my_blog:diary_detail' diary.pk %}">
+                    <a href="">
+                        <h2 class="post-title">
+                            {{ blog.title }}
+                        </h2>
+                        <h3 class="post-subtitle">
+                            {{ blog.content|truncatechars:20 }}
+                        </h3>
+                    </a>
+                    <p class="post-meta">{{ blog.created_at }}</p>
+                </div>
+                <hr>
+                {% empty %}
+                <p>日記がありません。</p>
+                {% endfor %}
+
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+### ページネーションの追加
+
+ページネーションをつける場合は以下を追加
+
+```
+                <!-- ページネーション処理 -->
+                {% if is_paginated %}
+                <ul class="pagination">
+                    <!-- 前ページへのリンク -->
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <!-- ページ数表示 -->
+                    {% for page_num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == page_num %}
+                    <li class="page-item active"><a class="page-link" href="#">{{ page_num }}</a></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a></li>
+                    {% endif %}
+                    {% endfor %}
+
+                    <!-- 次ページへのリンク -->
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% endif %}
+```
+
+
+
+ページネーションを加えたblog_list.html
+
+```
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}日記一覧 | My Blog{% endblock %}
+
+{% block active_my_blog_list %}active{% endblock %}
+
+{% block head %}
+<link href="{% static 'css/clean-blog.min.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block contents %}
+<div class="container">
+    <div class="row">
+        <div class="my-div-style w-100">
+            <div class="col-lg-8 col-md-10 mx-auto">
+                <div class="clearfix">
+                    <a class="btn btn-primary float-right" href="">新規作成</a>
+                </div>
+                {% for blog in blog_list %}
+                <div class="post-preview">
+                    <a href="">
                         <h2 class="post-title">
                             {{ blog.title }}
                         </h2>
@@ -2135,6 +2222,24 @@ my_blog/templates/blog_list.html
     </div>
 </div>
 {% endblock %}
+```
+
+
+
+また、ページネーションを追加する場合はviews.pyでBlogListViewに `aginate_by = 2` を追加します。
+
+my_blog/views.py
+
+```
+class BlogListView(LoginRequiredMixin, generic.ListView):
+    model = Blog
+    template_name = 'blog_list.html'
+    paginate_by = 2
+
+    def get_queryset(self):
+        blogs = Blog.objects.filter(
+            user=self.request.user).order_by('-created_at')
+        return blogs
 ```
 
 
@@ -2379,6 +2484,45 @@ python manage.py migrate
 **Running migrations:**
 
  Applying my_blog.0001_initial... **OK**
+
+
+
+## スーパーユーザーの作成
+
+スーパーユーザーを作成する場合、ユーザー名とメールアドレスとパスワードを聞いてきますので、それぞれ入力します。
+
+```
+python manage.py createsuperuser --settings blog.settings_dev
+```
+
+結果
+
+ユーザー名: tahara
+
+メールアドレス: aaaa@example.com
+
+Password: 
+
+Password (again): 
+
+Superuser created successfully.
+
+
+
+
+
+1. 再びrunseverを起動します。
+
+```
+python manage.py runserver
+```
+
+2. 次のアドレスでadmin画面に入れます。
+   http://127.0.0.1:8000/admin/
+3. Django管理サイトの認証画面になりますので、先に作ったスーパーユーザーで認証します。
+4. My_Blogの追加ボタンをクリック
+5. ブログ入力エディタが出てくるので記事を書く
+6. http://127.0.0.1:8000/blog-list/で先程の記事が一覧の中に表示される（最初は当然１つの記事のタイトルだけ
 
 
 
