@@ -1329,7 +1329,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 ### ローカル環境切り替えの環境変数設定
 
-環境変数に以下の内容を追記します。
+ローカル環境と本番環境の切り替えは manage.pyの `os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blog.settings')` で切り替えます。ローカルの時は `blog.settings`を `blog.settings_dev` に変更します。本番の時は、再び 'blog.settings' に戻します。
+
+環境変数に次のように設定することも可能です。ただし、この方法をとると複数のプロジェクトを運用するときに混乱してしまいますので注意してください。
 
 ```
 export DJANGO_SETTINGS_MODULE=blog.settings_dev
