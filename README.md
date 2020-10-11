@@ -1331,6 +1331,36 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 ローカル環境と本番環境の切り替えは manage.pyの `os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blog.settings')` で切り替えます。ローカルの時は `blog.settings`を `blog.settings_dev` に変更します。本番の時は、再び 'blog.settings' に戻します。
 
+manage.py
+
+```
+#!/usr/bin/env python
+"""Django's command-line utility for administrative tasks."""
+import os
+import sys
+
+
+def main():
+    """Run administrative tasks."""
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blog.settings_dev')
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Couldn't import Django. Are you sure it's installed and "
+            "available on your PYTHONPATH environment variable? Did you "
+            "forget to activate a virtual environment?"
+        ) from exc
+    execute_from_command_line(sys.argv)
+
+
+if __name__ == '__main__':
+    main()
+
+```
+
+
+
 環境変数に次のように設定することも可能です。ただし、この方法をとると複数のプロジェクトを運用するときに混乱してしまいますので注意してください。
 
 ```
